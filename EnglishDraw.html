@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>English Draw 🎨</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:linear-gradient(160deg,#ffecd2 0%,#fcb69f 100%);
+  font-family:'Segoe UI',sans-serif;
+  min-height:100vh;
+  display:flex;justify-content:center;
+  padding:14px 14px 36px;
+}
+#app{width:100%;max-width:440px;display:flex;flex-direction:column;align-items:center;}
+
+/* TOP BAR */
+.topbar{
+  width:100%;display:flex;justify-content:space-between;
+  align-items:center;margin-bottom:12px;
+}
+.title-badge{
+  font-size:20px;font-weight:900;color:#c0392b;
+  letter-spacing:-0.5px;
+}
+.gallery-btn{
+  background:#fff;border:none;border-radius:14px;
+  padding:8px 14px;font-size:13px;font-weight:800;
+  color:#e67e22;cursor:pointer;transition:0.2s;
+  box-shadow:0 2px 8px rgba(0,0,0,0.1);font-family:inherit;
+}
+.gallery-btn:hover{transform:translateY(-1px);}
+
+/* INSTRUCTION CARD */
+.instruction-card{
+  width:100%;background:#fff;
+  border-radius:24px;padding:18px 20px;
+  margin-bottom:12px;
+  box-shadow:0 6px 24px rgba(252,102,79,0.2);
+  border:3px solid #FCB69F;
+}
+.step-label{
+  font-size:11px;font-weight:700;color:#aaa;
+  letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;
+}
+.instruction-text{
+  font-size:21px;font-weight:900;color:#222;
+  line-height:1.3;margin-bottom:8px;
+}
+.instruction-hint{
+  display:inline-block;
+  background:#FFF3E0;border-radius:99px;
+  padding:4px 12px;font-size:13px;font-weight:700;color:#e67e22;
+}
+.progress-dots{
+  display:flex;gap:6px;margin-top:12px;
+}
+.dot{
+  width:8px;height:8px;border-radius:99px;
+  background:#eee;transition:0.3s;
+}
+.dot.active{background:#FC664F;transform:scale(1.3);}
+.dot.done{background:#6BCB77;}
+
+/* CANVAS AREA */
+.canvas-wrap{
+  width:100%;position:relative;
+  border-radius:22px;overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,0.15);
+  margin-bottom:12px;
+  border:3px solid rgba(255,255,255,0.8);
+}
+#drawCanvas{
+  display:block;width:100%;
+  touch-action:none;
+  background:#fff;
+  cursor:crosshair;
+}
+
+/* TOOLS */
+.tools-row{
+  width:100%;display:flex;gap:8px;
+  align-items:center;margin-bottom:10px;
+}
+.color-strip{
+  display:flex;gap:6px;flex-wrap:wrap;flex:1;
+}
+.color-dot{
+  width:34px;height:34px;border-radius:99px;
+  border:3px solid transparent;cursor:pointer;
+  transition:0.2s;box-shadow:0 2px 6px rgba(0,0,0,0.15);
+}
+.color-dot.active{border-color:#333;transform:scale(1.2);}
+.color-dot:hover{transform:scale(1.1);}
+
+.tool-divider{width:1px;height:36px;background:rgba(0,0,0,0.1);}
+
+.size-btns{display:flex;gap:6px;align-items:center;}
+.size-btn{
+  background:#fff;border:2px solid #ddd;
+  border-radius:99px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:0.2s;
+}
+.size-btn.active{border-color:#FC664F;background:#FFF3E0;}
+.size-btn:hover{transform:scale(1.1);}
+
+.eraser-btn{
+  background:#fff;border:2px solid #ddd;
+  border-radius:12px;padding:7px 11px;
+  font-size:16px;cursor:pointer;
+  transition:0.2s;
+}
+.eraser-btn.active{border-color:#FC664F;background:#FFF3E0;}
+
+/* ACTION BUTTONS */
+.action-row{
+  width:100%;display:flex;gap:10px;margin-bottom:0;
+}
+.clear-btn{
+  flex:1;background:#fff;border:2px solid #ddd;
+  border-radius:16px;padding:13px;
+  font-size:14px;font-weight:700;color:#888;
+  cursor:pointer;transition:0.2s;font-family:inherit;
+}
+.clear-btn:hover{border-color:#FC664F;color:#FC664F;}
+.done-btn{
+  flex:2;
+  background:linear-gradient(135deg,#FC664F,#e74c3c);
+  border:none;border-radius:16px;padding:14px;
+  font-size:16px;font-weight:800;color:#fff;
+  cursor:pointer;transition:0.2s;font-family:inherit;
+  box-shadow:0 4px 14px rgba(252,102,79,0.4);
+}
+.done-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(252,102,79,0.5);}
+.done-btn:active{transform:scale(0.97);}
+
+/* GALLERY */
+.gallery-screen{width:100%;}
+.gallery-header{
+  display:flex;align-items:center;gap:12px;margin-bottom:16px;
+}
+.back-btn2{
+  background:rgba(255,255,255,0.7);border:none;
+  border-radius:12px;padding:10px 14px;
+  font-size:14px;cursor:pointer;font-weight:700;
+  font-family:inherit;color:#c0392b;
+}
+.gallery-title{font-size:20px;font-weight:900;color:#c0392b;}
+.gallery-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:12px;
+  width:100%;
+}
+.gallery-item{
+  background:#fff;border-radius:18px;
+  overflow:hidden;
+  box-shadow:0 4px 16px rgba(0,0,0,0.1);
+  transition:0.2s;
+}
+.gallery-item:hover{transform:scale(1.02);}
+.gallery-img{width:100%;display:block;}
+.gallery-caption{
+  padding:8px 10px;
+  font-size:11px;font-weight:700;color:#888;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.gallery-empty{
+  text-align:center;padding:40px 20px;
+  color:#bbb;font-size:15px;font-weight:600;
+  width:100%;
+}
+
+/* COMPLETE SCREEN */
+.complete-card{
+  background:#fff;border-radius:28px;
+  padding:32px 24px;text-align:center;
+  box-shadow:0 12px 40px rgba(0,0,0,0.15);
+  width:100%;
+  animation:popIn 0.5s cubic-bezier(.4,2,.6,1);
+}
+.complete-art{
+  width:100%;border-radius:16px;
+  margin-bottom:16px;display:block;
+  box-shadow:0 4px 12px rgba(0,0,0,0.1);
+}
+.complete-title{font-size:26px;font-weight:900;color:#222;margin-bottom:6px;}
+.complete-sub{font-size:14px;color:#888;margin-bottom:20px;}
+.save-btn{
+  width:100%;background:linear-gradient(135deg,#6BCB77,#4CAF50);
+  border:none;border-radius:16px;padding:15px;
+  color:#fff;font-size:16px;font-weight:800;
+  cursor:pointer;font-family:inherit;margin-bottom:10px;
+  box-shadow:0 4px 14px rgba(107,203,119,0.4);
+  transition:0.2s;
+}
+.save-btn:hover{transform:translateY(-2px);}
+.next-challenge-btn{
+  width:100%;background:linear-gradient(135deg,#FC664F,#e74c3c);
+  border:none;border-radius:16px;padding:15px;
+  color:#fff;font-size:16px;font-weight:800;
+  cursor:pointer;font-family:inherit;
+  box-shadow:0 4px 14px rgba(252,102,79,0.4);
+  transition:0.2s;
+}
+.next-challenge-btn:hover{transform:translateY(-2px);}
+
+@keyframes popIn{from{opacity:0;transform:scale(0.85)}to{opacity:1;transform:scale(1)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ── CHALLENGES ───────────────────────────────────────────────────
+const CHALLENGES = [
+  {
+    title:"Draw the SUN! ☀️",
+    steps:[
+      { text:"Draw a big YELLOW circle! ⭕", hint:"Use yellow 🟡", suggestColor:"#FFD93D" },
+      { text:"Add SHORT lines around it! 〰️", hint:"Like sunshine rays! ✨", suggestColor:"#FFD93D" },
+      { text:"Give the sun a HAPPY face! 😄", hint:"Eyes and a smile!", suggestColor:"#FF8C00" },
+    ]
+  },
+  {
+    title:"Draw a HOUSE! 🏠",
+    steps:[
+      { text:"Draw a big RED square! 🟥", hint:"This is the house!", suggestColor:"#E74C3C" },
+      { text:"Draw a BROWN triangle on top! 🔺", hint:"That's the roof!", suggestColor:"#795548" },
+      { text:"Add a small BLUE door! 🚪", hint:"Doors go at the bottom!", suggestColor:"#3498DB" },
+      { text:"Draw TWO windows! 🪟", hint:"One on each side!", suggestColor:"#74C0FC" },
+    ]
+  },
+  {
+    title:"Draw a TREE! 🌳",
+    steps:[
+      { text:"Draw a tall BROWN rectangle! 📦", hint:"This is the trunk!", suggestColor:"#795548" },
+      { text:"Draw a BIG green circle on top! 🟢", hint:"That's the leaves!", suggestColor:"#4CAF50" },
+      { text:"Add some ROUND fruits! 🍎", hint:"Use red or orange!", suggestColor:"#E74C3C" },
+    ]
+  },
+  {
+    title:"Draw a FISH! 🐟",
+    steps:[
+      { text:"Draw a big OVAL shape! 🫧", hint:"Like a stretched circle!", suggestColor:"#3498DB" },
+      { text:"Add a V-shaped TAIL! 🔺", hint:"Put it on the right side!", suggestColor:"#3498DB" },
+      { text:"Draw a small CIRCLE for the eye! 👁️", hint:"Tiny circle on the left!", suggestColor:"#222" },
+      { text:"Add some LINES for scales! 〰️", hint:"Curved lines on the body!", suggestColor:"#74C0FC" },
+    ]
+  },
+  {
+    title:"Draw a RAINBOW! 🌈",
+    steps:[
+      { text:"Draw a BIG red arc! 🔴", hint:"Like a big hump!", suggestColor:"#E74C3C" },
+      { text:"Draw an ORANGE arc below it! 🟠", hint:"A bit smaller!", suggestColor:"#FF8C00" },
+      { text:"Add a YELLOW arc! 🟡", hint:"Keep going smaller!", suggestColor:"#FFD93D" },
+      { text:"Add GREEN and BLUE arcs! 💚💙", hint:"Almost done!", suggestColor:"#4CAF50" },
+    ]
+  },
+  {
+    title:"Draw a FLOWER! 🌸",
+    steps:[
+      { text:"Draw a YELLOW circle in the middle! 🌕", hint:"Not too big!", suggestColor:"#FFD93D" },
+      { text:"Add PINK petals around it! 🌸", hint:"5 or 6 oval petals!", suggestColor:"#FF69B4" },
+      { text:"Draw a GREEN stem going down! 🌿", hint:"A straight line!", suggestColor:"#4CAF50" },
+      { text:"Add two GREEN leaves! 🍃", hint:"One on each side of the stem!", suggestColor:"#4CAF50" },
+    ]
+  },
+];
+
+const COLORS = ["#E74C3C","#FF8C00","#FFD93D","#4CAF50","#3498DB","#9B59B6","#795548","#FF69B4","#222222","#fff"];
+const SIZES  = [
+  { r:4,  label:"S" },
+  { r:10, label:"M" },
+  { r:20, label:"L" },
+];
+
+// ── STATE ────────────────────────────────────────────────────────
+let state = {
+  screen: "draw",       // "draw" | "gallery" | "complete"
+  challengeIdx: 0,
+  stepIdx: 0,
+  color: "#FFD93D",
+  brushSize: 10,
+  isEraser: false,
+  gallery: JSON.parse(localStorage.getItem("eng_draw_gallery")||"[]"),
+  completedDataURL: null,
+};
+
+// Canvas drawing vars
+let canvas, ctx, drawing=false, lastX=0, lastY=0;
+let savedCanvasData=null; // 絵を保持するための変数
+
+function setState(patch){ state=Object.assign({},state,patch); render(); }
+
+// ── DRAW LOGIC ───────────────────────────────────────────────────
+function initCanvas(){
+  canvas = document.getElementById("drawCanvas");
+  if(!canvas) return;
+  const W = canvas.offsetWidth;
+  canvas.width  = W;
+  canvas.height = Math.round(W * 0.85);
+  ctx = canvas.getContext("2d");
+  ctx.lineCap="round";
+  ctx.lineJoin="round";
+
+  // 保存した絵があれば復元、なければ白紙
+  if(savedCanvasData){
+    const img=new Image();
+    img.onload=()=>{ ctx.drawImage(img,0,0,canvas.width,canvas.height); };
+    img.src=savedCanvasData;
+  } else {
+    ctx.fillStyle="#fff";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  canvas.addEventListener("mousedown", startDraw);
+  canvas.addEventListener("mousemove", draw);
+  canvas.addEventListener("mouseup",   stopDraw);
+  canvas.addEventListener("mouseleave",stopDraw);
+  canvas.addEventListener("touchstart", e=>{e.preventDefault();startDraw(e.touches[0]);},{passive:false});
+  canvas.addEventListener("touchmove",  e=>{e.preventDefault();draw(e.touches[0]);},{passive:false});
+  canvas.addEventListener("touchend",   e=>{e.preventDefault();stopDraw();},{passive:false});
+}
+
+function getPos(e){
+  const r = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / r.width;
+  const scaleY = canvas.height / r.height;
+  return {
+    x: (e.clientX - r.left) * scaleX,
+    y: (e.clientY - r.top)  * scaleY,
+  };
+}
+
+function startDraw(e){
+  drawing=true;
+  const {x,y}=getPos(e);
+  lastX=x; lastY=y;
+}
+
+function draw(e){
+  if(!drawing||!ctx) return;
+  const {x,y}=getPos(e);
+  ctx.beginPath();
+  ctx.moveTo(lastX,lastY);
+  ctx.lineTo(x,y);
+  ctx.lineWidth = state.isEraser ? state.brushSize*3 : state.brushSize*2;
+  ctx.strokeStyle = state.isEraser ? "#fff" : state.color;
+  ctx.stroke();
+  lastX=x; lastY=y;
+}
+
+function stopDraw(){ drawing=false; }
+
+function clearCanvas(){
+  if(!ctx) return;
+  ctx.fillStyle="#fff";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  savedCanvasData = null;
+}
+
+// ── ACTIONS ──────────────────────────────────────────────────────
+function nextStep(){
+  const ch = CHALLENGES[state.challengeIdx];
+  const next = state.stepIdx+1;
+  // 次のステップへ移る前に現在の絵を保存
+  if(canvas) savedCanvasData = canvas.toDataURL("image/png");
+  if(next < ch.steps.length){
+    setState({ stepIdx:next, color: ch.steps[next].suggestColor, isEraser:false });
+  } else {
+    // Stage done
+    const dataURL = canvas ? canvas.toDataURL("image/png") : null;
+    setState({ screen:"complete", completedDataURL:dataURL });
+  }
+}
+
+function saveToGallery(){
+  if(!state.completedDataURL) return;
+  const ch = CHALLENGES[state.challengeIdx];
+  const newItem = {
+    dataURL: state.completedDataURL,
+    title: ch.title,
+    date: new Date().toLocaleDateString("en",{month:"short",day:"numeric"}),
+  };
+  const updated = [newItem, ...state.gallery.slice(0,11)];
+  localStorage.setItem("eng_draw_gallery", JSON.stringify(updated));
+  setState({ gallery: updated });
+}
+
+function nextChallenge(){
+  const next = (state.challengeIdx+1) % CHALLENGES.length;
+  savedCanvasData = null; // 新チャレンジは白紙から
+  setState({ screen:"draw", challengeIdx:next, stepIdx:0,
+    color: CHALLENGES[next].steps[0].suggestColor, isEraser:false,
+    completedDataURL:null });
+}
+
+function goGallery(){ setState({ screen:"gallery" }); }
+function goBack(){    setState({ screen:"draw" }); }
+
+// ── RENDER ───────────────────────────────────────────────────────
+function render(){
+  const app=document.getElementById("app");
+  if      (state.screen==="draw")     app.innerHTML=renderDraw();
+  else if (state.screen==="gallery")  app.innerHTML=renderGallery();
+  else if (state.screen==="complete") app.innerHTML=renderComplete();
+  bindEvents();
+  if(state.screen==="draw") initCanvas();
+}
+
+// ── DRAW SCREEN ──────────────────────────────────────────────────
+function renderDraw(){
+  const ch   = CHALLENGES[state.challengeIdx];
+  const step = ch.steps[state.stepIdx];
+  const total= ch.steps.length;
+
+  let dots="";
+  for(let i=0;i<total;i++){
+    dots+=`<div class="dot ${i===state.stepIdx?'active':i<state.stepIdx?'done':''}"></div>`;
+  }
+
+  let colorDots="";
+  COLORS.forEach(c=>{
+    const border = c==="#fff" ? "2px solid #ddd" : "none";
+    colorDots+=`
+      <div class="color-dot ${state.color===c&&!state.isEraser?'active':''}"
+           data-color="${c}"
+           style="background:${c};border:${border}"></div>`;
+  });
+
+  let sizeBtns="";
+  SIZES.forEach((s,i)=>{
+    const sz=8+i*6;
+    sizeBtns+=`
+      <div class="size-btn ${state.brushSize===s.r?'active':''}"
+           data-size="${s.r}"
+           style="width:${28+i*6}px;height:${28+i*6}px">
+        <div style="width:${sz}px;height:${sz}px;border-radius:99px;background:#ccc"></div>
+      </div>`;
+  });
+
+  return `
+    <div class="topbar">
+      <div class="title-badge">✏️ English Draw</div>
+      <button class="gallery-btn" id="btn-gallery">🖼️ Gallery (${state.gallery.length})</button>
+    </div>
+
+    <div class="instruction-card">
+      <div class="step-label">Step ${state.stepIdx+1} of ${total} — ${ch.title}</div>
+      <div class="instruction-text">${step.text}</div>
+      <div class="instruction-hint">💡 ${step.hint}</div>
+      <div class="progress-dots">${dots}</div>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="drawCanvas"></canvas>
+    </div>
+
+    <div class="tools-row">
+      <div class="color-strip">${colorDots}</div>
+      <div class="tool-divider"></div>
+      <div class="size-btns">${sizeBtns}</div>
+      <div class="tool-divider"></div>
+      <button class="eraser-btn ${state.isEraser?'active':''}" id="btn-eraser">🧹</button>
+    </div>
+
+    <div class="action-row">
+      <button class="clear-btn" id="btn-clear">🗑️ Clear</button>
+      <button class="done-btn" id="btn-done">
+        ${state.stepIdx<total-1 ? "Next Step →" : "Finished! 🎉"}
+      </button>
+    </div>
+  `;
+}
+
+// ── GALLERY SCREEN ───────────────────────────────────────────────
+function renderGallery(){
+  let items = state.gallery.length===0
+    ? `<div class="gallery-empty">No drawings yet!<br>🎨 Make your first one!</div>`
+    : state.gallery.map(item=>`
+        <div class="gallery-item">
+          <img class="gallery-img" src="${item.dataURL}" alt="${item.title}"/>
+          <div class="gallery-caption">${item.title} · ${item.date}</div>
+        </div>`).join("");
+
+  return `
+    <div class="gallery-screen">
+      <div class="gallery-header">
+        <button class="back-btn2" id="btn-back">← Back</button>
+        <div class="gallery-title">🖼️ My Gallery</div>
+      </div>
+      <div class="gallery-grid">${items}</div>
+    </div>
+  `;
+}
+
+// ── COMPLETE SCREEN ──────────────────────────────────────────────
+function renderComplete(){
+  const ch = CHALLENGES[state.challengeIdx];
+  const imgTag = state.completedDataURL
+    ? `<img class="complete-art" src="${state.completedDataURL}" alt="your drawing"/>`
+    : "";
+  const alreadySaved = state.gallery.length>0 &&
+    state.gallery[0].dataURL===state.completedDataURL;
+  return `
+    <div style="width:100%">
+      <div class="complete-card">
+        <div style="font-size:56px;margin-bottom:12px">🎨</div>
+        <div class="complete-title">Amazing work! ⭐</div>
+        <div class="complete-sub">You finished: ${ch.title}</div>
+        ${imgTag}
+        ${alreadySaved
+          ? `<div style="text-align:center;color:#4CAF50;font-weight:700;margin-bottom:10px">✅ Saved to gallery!</div>`
+          : `<button class="save-btn" id="btn-save">💾 Save to Gallery</button>`
+        }
+        <button class="next-challenge-btn" id="btn-next">Next Challenge! 🚀</button>
+      </div>
+    </div>
+  `;
+}
+
+// ── EVENTS ───────────────────────────────────────────────────────
+function bindEvents(){
+  // Color
+  document.querySelectorAll(".color-dot").forEach(el=>{
+    el.addEventListener("click",()=>setState({color:el.dataset.color, isEraser:false}));
+  });
+  // Size
+  document.querySelectorAll(".size-btn").forEach(el=>{
+    el.addEventListener("click",()=>setState({brushSize:+el.dataset.size, isEraser:false}));
+  });
+  // Eraser
+  const btnErase=document.getElementById("btn-eraser");
+  if(btnErase) btnErase.addEventListener("click",()=>setState({isEraser:!state.isEraser}));
+  // Clear
+  const btnClear=document.getElementById("btn-clear");
+  if(btnClear) btnClear.addEventListener("click",clearCanvas);
+  // Done / Next step
+  const btnDone=document.getElementById("btn-done");
+  if(btnDone) btnDone.addEventListener("click",nextStep);
+  // Gallery
+  const btnGal=document.getElementById("btn-gallery");
+  if(btnGal) btnGal.addEventListener("click",goGallery);
+  // Back
+  const btnBack=document.getElementById("btn-back");
+  if(btnBack) btnBack.addEventListener("click",goBack);
+  // Save
+  const btnSave=document.getElementById("btn-save");
+  if(btnSave) btnSave.addEventListener("click",()=>{saveToGallery();render();});
+  // Next challenge
+  const btnNext=document.getElementById("btn-next");
+  if(btnNext) btnNext.addEventListener("click",nextChallenge);
+}
+
+render();
+</script>
+</body>
+</html>
