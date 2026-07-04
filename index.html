@@ -372,48 +372,104 @@ function clearCanvas(){
   savedCanvasData = null;
 }
 
-// ── SCORING (絵の読み取り・点数化) ────────────────────────────────
+// ── SCORING（ステップごとに指示通りか採点） ──────────────────────
 function hex2rgb(h){
   h=h.replace("#","");
   if(h.length===3) h=h.split("").map(c=>c+c).join("");
   return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
 }
-function analyzeDrawing(){
-  if(!canvas||!ctx) return null;
-  const ch = CHALLENGES[state.challengeIdx];
-  const expected = [...new Set(ch.steps.map(s=>s.suggestColor))].map(hex=>({hex,rgb:hex2rgb(hex),count:0}));
-  const d = ctx.getImageData(0,0,canvas.width,canvas.height).data;
-  let drawn=0, total=0;
-  for(let i=0;i<d.length;i+=16){ // 4pxごとにサンプリング
+
+// 各ステップの「かたち・位置」チェック項目（チャレンジタイトルで引く）
+// big/small=大きさ tall/wide/round=形 top/bottom/left/right=位置 spread=広がり
+const STEP_CHECKS = {
+  "Draw the SUN! ☀️":      [["big","round"],["spread"],[]],
+  "Draw a HOUSE! 🏠":      [["big"],["top"],["bottom","small"],[]],
+  "Draw a TREE! 🌳":       [["tall"],["big","top"],[]],
+  "Draw a FISH! 🐟":       [["big"],["right"],["left","small"],[]],
+  "Draw a RAINBOW! 🌈":    [["big","wide"],[],[],[]],
+  "Draw a FLOWER! 🌸":     [[],["spread"],["tall"],[]],
+};
+
+let stepBaseline = null; // 前ステップ終了時のピクセル（差分検出用）
+let stepResults  = [];   // 各ステップの採点結果
+
+function resetScoring(){ stepBaseline=null; stepResults=[]; }
+
+function isInk(d,i){ return d[i+3]>=128 && !(d[i]>245&&d[i+1]>245&&d[i+2]>245); }
+
+// このステップで新しく描かれたピクセルだけを取り出して採点
+function analyzeStep(step, checks){
+  if(!canvas||!ctx) return {text:step.text,score:0,amountOk:false,colorOk:false,shapeOk:false};
+  const W=canvas.width, H=canvas.height;
+  const d=ctx.getImageData(0,0,W,H).data;
+  const base=(stepBaseline&&stepBaseline.length===d.length)?stepBaseline:null;
+  const rgb=hex2rgb(step.suggestColor);
+  let n=0, colorN=0, total=0, minX=W, maxX=-1, minY=H, maxY=-1;
+  for(let y=0;y<H;y+=2)for(let x=0;x<W;x+=2){
     total++;
-    const r=d[i],g=d[i+1],b=d[i+2],a=d[i+3];
-    if(a<128||(r>245&&g>245&&b>245)) continue; // 透明・白（未描画）
-    drawn++;
-    for(const e of expected){
-      if(Math.abs(r-e.rgb[0])<48&&Math.abs(g-e.rgb[1])<48&&Math.abs(b-e.rgb[2])<48){ e.count++; }
-    }
+    const i=(y*W+x)*4;
+    if(!isInk(d,i)) continue;
+    // 前ステップまでに描かれていて色も変わっていないピクセルは除外
+    if(base&&isInk(base,i)&&Math.abs(d[i]-base[i])<30&&Math.abs(d[i+1]-base[i+1])<30&&Math.abs(d[i+2]-base[i+2])<30) continue;
+    n++;
+    if(Math.abs(d[i]-rgb[0])<48&&Math.abs(d[i+1]-rgb[1])<48&&Math.abs(d[i+2]-rgb[2])<48) colorN++;
+    if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
   }
-  const coverage = drawn/total;
-  const matched = expected.filter(e=>e.count>=drawn*0.01&&e.count>=20);
-  // 描画量40点 + 指定色の使用50点 + 全色ボーナス10点
-  let score = Math.round(Math.min(coverage/0.15,1)*40 + (matched.length/expected.length)*50);
-  if(matched.length===expected.length && coverage>=0.08) score+=10;
-  score = Math.min(score,100);
-  const stars = score>=85?3:score>=60?2:1;
-  return { score, stars, coverage, matched:matched.map(e=>e.hex), expected:expected.map(e=>e.hex) };
+  // 量（40点）: キャンバスの0.8%以上を新しく描けば満点
+  const amount=Math.min((n/total)/0.008,1);
+  // 色（40点）: 新しく描いた部分の35%以上が指定色なら満点
+  const colorFrac=n>0?colorN/n:0;
+  const color=Math.min(colorFrac/0.35,1);
+  // かたち・位置（20点）: バウンディングボックスの大きさ・縦横比・重心で判定
+  const bw=maxX-minX, bh=maxY-minY;
+  const bboxFrac=n>0?(bw*bh)/(W*H):0;
+  const cx=n>0?(minX+maxX)/2/W:0.5, cy=n>0?(minY+maxY)/2/H:0.5;
+  const fill=n>0?n/Math.max(1,(bw*bh)/4):0;
+  let shapeOkCount=0;
+  const list=checks||[];
+  list.forEach(c=>{
+    let ok=false;
+    if(c==="big") ok=bboxFrac>=0.12;
+    else if(c==="small") ok=n>0&&bboxFrac<=0.18;
+    else if(c==="tall") ok=bh>bw*1.15;
+    else if(c==="wide") ok=bw>bh*1.15;
+    else if(c==="round") ok=bh>0&&bw/bh>0.65&&bw/bh<1.55;
+    else if(c==="top") ok=cy<=0.48;
+    else if(c==="bottom") ok=cy>=0.52;
+    else if(c==="left") ok=cx<=0.48;
+    else if(c==="right") ok=cx>=0.52;
+    else if(c==="spread") ok=bboxFrac>=0.15&&fill<0.55;
+    if(ok) shapeOkCount++;
+  });
+  const shape=list.length?shapeOkCount/list.length:(n>0?1:0);
+  const score=Math.round(amount*40+color*40+shape*20);
+  return {text:step.text, score, amountOk:amount>=0.6, colorOk:colorFrac>=0.2, shapeOk:shape>=0.99};
+}
+
+function summarizeResult(){
+  if(stepResults.length===0) return null;
+  const score=Math.round(stepResults.reduce((s,r)=>s+r.score,0)/stepResults.length);
+  const stars=score>=85?3:score>=60?2:1;
+  return {score, stars, steps:stepResults.slice()};
 }
 
 // ── ACTIONS ──────────────────────────────────────────────────────
 function nextStep(){
   const ch = CHALLENGES[state.challengeIdx];
+  const step = ch.steps[state.stepIdx];
+  // このステップで描いた部分を採点してから次へ
+  const checks = (STEP_CHECKS[ch.title]||[])[state.stepIdx]||[];
+  stepResults.push(analyzeStep(step, checks));
+  if(canvas){
+    savedCanvasData = canvas.toDataURL("image/png");
+    stepBaseline = ctx.getImageData(0,0,canvas.width,canvas.height).data.slice();
+  }
   const next = state.stepIdx+1;
-  // 次のステップへ移る前に現在の絵を保存
-  if(canvas) savedCanvasData = canvas.toDataURL("image/png");
   if(next < ch.steps.length){
     setState({ stepIdx:next, color: ch.steps[next].suggestColor, isEraser:false });
   } else {
-    // Stage done — 絵を読み取って採点
-    const result = analyzeDrawing();
+    // Stage done — 全ステップの採点を集計
+    const result = summarizeResult();
     const dataURL = canvas ? canvas.toDataURL("image/png") : null;
     setState({ screen:"complete", completedDataURL:dataURL, result });
   }
@@ -438,6 +494,7 @@ function nextChallenge(){
   if(orderPos>=order.length){ order=shuffle([...CHALLENGES.keys()]); orderPos=0; }
   const next = order[orderPos];
   savedCanvasData = null; // 新チャレンジは白紙から
+  resetScoring();
   setState({ screen:"draw", challengeIdx:next, stepIdx:0,
     color: CHALLENGES[next].steps[0].suggestColor, isEraser:false,
     completedDataURL:null, result:null });
@@ -554,20 +611,23 @@ function renderComplete(){
   let scoreHtml="";
   if(r){
     const starStr = "⭐".repeat(r.stars)+"☆".repeat(3-r.stars);
-    const colorChecks = r.expected.map(hex=>{
-      const ok = r.matched.includes(hex);
-      return `<span style="display:inline-flex;align-items:center;gap:3px;margin:2px 4px;font-size:13px;font-weight:700;color:${ok?'#4CAF50':'#bbb'}">
-        <span style="width:14px;height:14px;border-radius:99px;background:${hex};border:1px solid #ddd;display:inline-block"></span>${ok?'✅':'−'}</span>`;
+    // ステップごとの「指示通りにできたか」内訳
+    const rows = r.steps.map((s,i)=>{
+      const mark = s.score>=75?"✅":s.score>=45?"🔺":"❌";
+      const sub = `${s.colorOk?"🎨✓":"🎨✗"} ${s.shapeOk?"📐✓":"📐✗"}`;
+      return `<div style="display:flex;align-items:center;gap:6px;text-align:left;font-size:12px;font-weight:700;color:#555;margin:3px 0">
+        <span>${mark}</span><span style="flex:1">${i+1}. ${s.text}</span>
+        <span style="color:#999;white-space:nowrap">${sub}</span></div>`;
     }).join("");
-    const msg = r.score>=85?"Perfect! You used all the colors! 🌟"
+    const msg = r.score>=85?"Perfect! You followed all the steps! 🌟"
               : r.score>=60?"Great job! Nice drawing! 👏"
-              : "Good try! Draw a bit more next time! 💪";
+              : "Good try! Follow the steps next time! 💪";
     scoreHtml = `
       <div style="background:#FFF8E1;border-radius:16px;padding:14px;margin-bottom:14px">
         <div style="font-size:38px;font-weight:900;color:#FC664F">${r.score}<span style="font-size:16px;color:#e67e22"> / 100</span></div>
-        <div style="font-size:22px;margin:4px 0">${starStr}</div>
-        <div style="font-size:12px;color:#888;font-weight:700">Colors used:</div>
-        <div>${colorChecks}</div>
+        <div style="font-size:22px;margin:4px 0 8px">${starStr}</div>
+        ${rows}
+        <div style="font-size:10px;color:#bbb;font-weight:700;margin-top:4px">🎨=いろ 📐=かたち・ばしょ</div>
         <div style="font-size:13px;font-weight:700;color:#e67e22;margin-top:6px">${msg}</div>
       </div>`;
   }
