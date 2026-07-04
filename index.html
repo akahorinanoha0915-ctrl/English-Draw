@@ -275,16 +275,28 @@ const SIZES  = [
   { r:20, label:"L" },
 ];
 
+// ── RANDOM ORDER ─────────────────────────────────────────────────
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+let order = shuffle([...CHALLENGES.keys()]);
+let orderPos = 0;
+
 // ── STATE ────────────────────────────────────────────────────────
 let state = {
   screen: "draw",       // "draw" | "gallery" | "complete"
-  challengeIdx: 0,
+  challengeIdx: order[0],
   stepIdx: 0,
-  color: "#FFD93D",
+  color: CHALLENGES[order[0]].steps[0].suggestColor,
   brushSize: 10,
   isEraser: false,
   gallery: JSON.parse(localStorage.getItem("eng_draw_gallery")||"[]"),
   completedDataURL: null,
+  result: null,        // 採点結果 {score, stars, coverage, matched, expected}
 };
 
 // Canvas drawing vars
@@ -360,6 +372,37 @@ function clearCanvas(){
   savedCanvasData = null;
 }
 
+// ── SCORING (絵の読み取り・点数化) ────────────────────────────────
+function hex2rgb(h){
+  h=h.replace("#","");
+  if(h.length===3) h=h.split("").map(c=>c+c).join("");
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+function analyzeDrawing(){
+  if(!canvas||!ctx) return null;
+  const ch = CHALLENGES[state.challengeIdx];
+  const expected = [...new Set(ch.steps.map(s=>s.suggestColor))].map(hex=>({hex,rgb:hex2rgb(hex),count:0}));
+  const d = ctx.getImageData(0,0,canvas.width,canvas.height).data;
+  let drawn=0, total=0;
+  for(let i=0;i<d.length;i+=16){ // 4pxごとにサンプリング
+    total++;
+    const r=d[i],g=d[i+1],b=d[i+2],a=d[i+3];
+    if(a<128||(r>245&&g>245&&b>245)) continue; // 透明・白（未描画）
+    drawn++;
+    for(const e of expected){
+      if(Math.abs(r-e.rgb[0])<48&&Math.abs(g-e.rgb[1])<48&&Math.abs(b-e.rgb[2])<48){ e.count++; }
+    }
+  }
+  const coverage = drawn/total;
+  const matched = expected.filter(e=>e.count>=drawn*0.01&&e.count>=20);
+  // 描画量40点 + 指定色の使用50点 + 全色ボーナス10点
+  let score = Math.round(Math.min(coverage/0.15,1)*40 + (matched.length/expected.length)*50);
+  if(matched.length===expected.length && coverage>=0.08) score+=10;
+  score = Math.min(score,100);
+  const stars = score>=85?3:score>=60?2:1;
+  return { score, stars, coverage, matched:matched.map(e=>e.hex), expected:expected.map(e=>e.hex) };
+}
+
 // ── ACTIONS ──────────────────────────────────────────────────────
 function nextStep(){
   const ch = CHALLENGES[state.challengeIdx];
@@ -369,9 +412,10 @@ function nextStep(){
   if(next < ch.steps.length){
     setState({ stepIdx:next, color: ch.steps[next].suggestColor, isEraser:false });
   } else {
-    // Stage done
+    // Stage done — 絵を読み取って採点
+    const result = analyzeDrawing();
     const dataURL = canvas ? canvas.toDataURL("image/png") : null;
-    setState({ screen:"complete", completedDataURL:dataURL });
+    setState({ screen:"complete", completedDataURL:dataURL, result });
   }
 }
 
@@ -381,6 +425,7 @@ function saveToGallery(){
   const newItem = {
     dataURL: state.completedDataURL,
     title: ch.title,
+    score: state.result ? state.result.score : null,
     date: new Date().toLocaleDateString("en",{month:"short",day:"numeric"}),
   };
   const updated = [newItem, ...state.gallery.slice(0,11)];
@@ -389,11 +434,13 @@ function saveToGallery(){
 }
 
 function nextChallenge(){
-  const next = (state.challengeIdx+1) % CHALLENGES.length;
+  orderPos++;
+  if(orderPos>=order.length){ order=shuffle([...CHALLENGES.keys()]); orderPos=0; }
+  const next = order[orderPos];
   savedCanvasData = null; // 新チャレンジは白紙から
   setState({ screen:"draw", challengeIdx:next, stepIdx:0,
     color: CHALLENGES[next].steps[0].suggestColor, isEraser:false,
-    completedDataURL:null });
+    completedDataURL:null, result:null });
 }
 
 function goGallery(){ setState({ screen:"gallery" }); }
@@ -481,7 +528,7 @@ function renderGallery(){
     : state.gallery.map(item=>`
         <div class="gallery-item">
           <img class="gallery-img" src="${item.dataURL}" alt="${item.title}"/>
-          <div class="gallery-caption">${item.title} · ${item.date}</div>
+          <div class="gallery-caption">${item.title}${item.score!=null?` · ${item.score}pt`:""} · ${item.date}</div>
         </div>`).join("");
 
   return `
@@ -503,6 +550,27 @@ function renderComplete(){
     : "";
   const alreadySaved = state.gallery.length>0 &&
     state.gallery[0].dataURL===state.completedDataURL;
+  const r = state.result;
+  let scoreHtml="";
+  if(r){
+    const starStr = "⭐".repeat(r.stars)+"☆".repeat(3-r.stars);
+    const colorChecks = r.expected.map(hex=>{
+      const ok = r.matched.includes(hex);
+      return `<span style="display:inline-flex;align-items:center;gap:3px;margin:2px 4px;font-size:13px;font-weight:700;color:${ok?'#4CAF50':'#bbb'}">
+        <span style="width:14px;height:14px;border-radius:99px;background:${hex};border:1px solid #ddd;display:inline-block"></span>${ok?'✅':'−'}</span>`;
+    }).join("");
+    const msg = r.score>=85?"Perfect! You used all the colors! 🌟"
+              : r.score>=60?"Great job! Nice drawing! 👏"
+              : "Good try! Draw a bit more next time! 💪";
+    scoreHtml = `
+      <div style="background:#FFF8E1;border-radius:16px;padding:14px;margin-bottom:14px">
+        <div style="font-size:38px;font-weight:900;color:#FC664F">${r.score}<span style="font-size:16px;color:#e67e22"> / 100</span></div>
+        <div style="font-size:22px;margin:4px 0">${starStr}</div>
+        <div style="font-size:12px;color:#888;font-weight:700">Colors used:</div>
+        <div>${colorChecks}</div>
+        <div style="font-size:13px;font-weight:700;color:#e67e22;margin-top:6px">${msg}</div>
+      </div>`;
+  }
   return `
     <div style="width:100%">
       <div class="complete-card">
@@ -510,6 +578,7 @@ function renderComplete(){
         <div class="complete-title">Amazing work! ⭐</div>
         <div class="complete-sub">You finished: ${ch.title}</div>
         ${imgTag}
+        ${scoreHtml}
         ${alreadySaved
           ? `<div style="text-align:center;color:#4CAF50;font-weight:700;margin-bottom:10px">✅ Saved to gallery!</div>`
           : `<button class="save-btn" id="btn-save">💾 Save to Gallery</button>`
